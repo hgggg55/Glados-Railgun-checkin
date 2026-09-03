@@ -64,7 +64,8 @@ jobs:
         retain_days: 7
         keep_minimum_runs: 7
         delete_run_by_conclusion_pattern: success
-COOKIE="YOUR_COOKIE_HERE"
+
+  COOKIE="YOUR_COOKIE_HERE"
 
 # 1. 自动签到
 echo ">>> 正在执行签到..."
