@@ -1,42 +1,63 @@
-COOKIE="YOUR_COOKIE_HERE"
+name: GLaDOS Checkin
 
-# 1. 自动签到
-echo ">>> 正在执行签到..."
-curl -s -X POST "https://glados.cloud/api/user/checkin" \
-  -H "cookie: $COOKIE" \
-  -H "referer: https://glados.cloud/console/checkin" \
-  -H "origin: https://glados.cloud" \
-  -H "content-type: application/json;charset=UTF-8" \
-  -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-  -d '{"token":"glados.one"}'
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - "README.md"
+      - 'imgs/**'
+  schedule:
+    # 每天 UTC 时间 1:00 和 4:00 运行（北京时间 9:00 和 12:00）
+    - cron: '0 1,4 * * *'
 
-echo -e "\n"
-echo ">>> 正在获取账号积分状态..."
-STATUS_RES=$(curl -s -X GET "https://glados.cloud/api/user/status" \
-  -H "cookie: $COOKIE" \
-  -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+jobs:
+  build:
+    name: GLADOS/Railgun Checkin
+    runs-on: ubuntu-latest
+      
+    permissions:
+      contents: read
+      actions: write
 
-# 提取积分 (默认匹配 points 数字)
-POINTS=$(echo "$STATUS_RES" | grep -o '"points":"[^"]*"' | cut -d'"' -f4 | cut -d'.' -f1)
+    strategy:
+      matrix:
+        python-version: ['3.12']
 
-# 如果提取不到字符串格式的 points，尝试匹配数字格式
-if [ -z "$POINTS" ]; then
-    POINTS=$(echo "$STATUS_RES" | grep -o '"points":[0-9]*' | cut -d':' -f2)
-fi
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE20: true
 
-echo "当前积分: ${POINTS:-未知}"
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-# 3. 积分达到或超过 100 时触发兑换
-if [ -n "$POINTS" ] && [ "$POINTS" -ge 100 ]; then
-    echo ">>> 积分已达到 100，正在兑换 10 天套餐..."
-    curl -s -X POST "https://glados.cloud/api/user/exchange" \
-      -H "cookie: $COOKIE" \
-      -H "referer: https://glados.cloud/console/checkin" \
-      -H "origin: https://glados.cloud" \
-      -H "content-type: application/json;charset=UTF-8" \
-      -H "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)" \
-      -d '{"plan":"plan100"}'
-    echo -e "\n兑换请求已发送！"
-else
-    echo ">>> 积分不足 100，暂不执行兑换。"
-fi
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pypushdeer
+
+    - name: Run checkin script
+      run: |
+        python checkin.py
+      env:
+        PUSHDEER_SENDKEY: ${{ secrets.PUSHDEER_SENDKEY }}
+        GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
+        GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
+        GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
+
+    - name: Keepalive Workflow
+      uses: gautamkrishnar/keepalive-workflow@v2
+        
+    - name: Delete old workflow runs
+      uses: Mattraks/delete-workflow-runs@v2
+      with:
+        token: ${{ github.token }}
+        repository: ${{ github.repository }}
+        retain_days: 7
+        keep_minimum_runs: 7
+        delete_run_by_conclusion_pattern: success
