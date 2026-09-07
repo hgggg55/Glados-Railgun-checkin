@@ -51,7 +51,7 @@ jobs:
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
     - name: Keepalive Workflow
-      uses: gautamkrishnar/keepalive-workflow@v2
+      uses: liskin/gh-workflow-keepalive@v1
         
     - name: Delete old workflow runs
       uses: Mattraks/delete-workflow-runs@v2
